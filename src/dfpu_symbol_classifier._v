@@ -1,0 +1,78 @@
+`timescale 1ns / 1ps
+
+`include "du_symbols.vh"
+
+module dfpu_symbol_classifier (
+    input wire                             i_clk,
+    input wire                             i_rst,
+    input wire                             i_valid,
+    input wire                             i_ready,
+    input wire       [`DU_SYM_WIDTH-1:0] i_symbol,
+    output wire      [`DU_SYM_WIDTH-1:0] o_symbol,
+    output wire [`DU_SYM_TYPE_WIDTH-1:0] o_symbol_type,
+    output wire                            o_valid,
+    output wire                            o_ready
+);
+    
+    reg [`DU_SYM_WIDTH-1:0] symbol_reg [1:0];
+
+    reg [`DU_SYM_TYPE_WIDTH-1:0] type_reg [1:0], type_next [1:0];
+
+    reg valid_reg, valid_next;
+
+    assign o_symbol      = symbol_reg[1];
+    assign o_symbol_type = type_reg[1];
+
+    assign o_valid = valid_reg;
+    assign o_ready = i_ready || ((symbol_reg[0] == `DU_SYM_INVALID) && (symbol_reg[1] == `DU_SYM_INVALID));
+
+    initial begin
+        symbol_reg[0] = `DU_SYM_INVALID;
+        symbol_reg[1] = `DU_SYM_INVALID;
+
+        type_reg[0] = `DU_SYM_TYPE_INVALID;
+        type_reg[1] = `DU_SYM_TYPE_INVALID;
+
+        valid_reg = 1'b0;
+    end
+
+    always @* begin
+        type_next[0] = `DU_SYM_TYPE_INVALID;
+        type_next[1] = type_reg[0];
+
+        valid_next = valid_reg;
+
+        if             ((i_symbol >= `DU_SYM_0) && (i_symbol <= `DU_SYM_9)) type_next[0] = `DU_SYM_TYPE_DIGIT;
+        else if ((i_symbol == `DU_SYM_PLUS) || (i_symbol == `DU_SYM_MINUS)) type_next[0] = `DU_SYM_TYPE_SIGN;
+        else if                                   (i_symbol == `DU_SYM_COMMA) type_next[0] = `DU_SYM_TYPE_COMMA;
+        else if                                  (i_symbol == `DU_SYM_RESULT) type_next[0] = `DU_SYM_TYPE_SPECIAL;
+
+        if ((type_reg[0] == `DU_SYM_TYPE_SIGN) && (type_next[0] != `DU_SYM_TYPE_DIGIT)) type_next[1] = `DU_SYM_TYPE_OPERATOR;
+
+        if        (i_valid & i_ready) valid_next = 1'b1;
+        else if (valid_reg & i_ready) valid_next = 1'b0;
+    end
+
+    always @(posedge i_clk) begin
+        if (i_rst) begin
+            symbol_reg[0] <= `DU_SYM_INVALID;
+            symbol_reg[1] <= `DU_SYM_INVALID;
+
+            type_reg[0] <= `DU_SYM_TYPE_INVALID;
+            type_reg[1] <= `DU_SYM_TYPE_INVALID;
+
+            valid_reg <= 1'b0;
+        end else begin
+            if (i_valid & i_ready) begin
+                symbol_reg[0] <= i_symbol;
+                symbol_reg[1] <= symbol_reg[0];
+
+                type_reg[0] <= type_next[0];
+                type_reg[1] <= type_next[1];
+            end
+
+            valid_reg <= valid_next;
+        end
+    end
+
+endmodule
