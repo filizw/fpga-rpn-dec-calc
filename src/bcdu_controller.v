@@ -133,7 +133,7 @@ module bcdu_controller #(
                     flags_mask_next[`BCDU_TF] = 1'b1;
 
                     if (shift_digit_ld) begin
-                        shl_digit_next = shift_digit;
+                        shl_digit_next = (shift_digit > 4'd9) ? i_digit : shift_digit;
                         shl_amt_next   = 1;
                         shr_amt_next   = (NUM_DIGITS - 1);
                     end else begin
@@ -193,7 +193,8 @@ module bcdu_controller #(
                 end
 
                 `BCDU_OP_ACA, `BCDU_OP_ACS: begin
-                    wr_en_next     = 1'b1;
+                    if ((acc_digit != 0) || (i_digit != 0) || (mcycle_cnt_reg != 0)) wr_en_next = 1'b1;
+
                     rd_addr_b_next = addr1;
                     ncp_en_next    = sub;
 

@@ -16,21 +16,17 @@
 `define DAU_SYM_8 5'h18
 `define DAU_SYM_9 5'h19
 
+`define DAU_SYM_COMMA 5'h1C
+
 `define DAU_SYM_PLUS  5'h1B
 `define DAU_SYM_MINUS 5'h1D
 
-`define DAU_SYM_COMMA 5'h1C
+`define DAU_SYM_MUL 5'h1A
+`define DAU_SYM_DIV 5'h1F
 
 `define DAU_SYM_SEPARATOR 5'h02
 `define DAU_SYM_RESULT    5'h0D
-
-`define DAU_SYM_TYPE_WIDTH 3
-
-`define DAU_SYM_TYPE_INVALID  3'd0
-`define DAU_SYM_TYPE_DIGIT    3'd1
-`define DAU_SYM_TYPE_SIGN     3'd2
-`define DAU_SYM_TYPE_COMMA    3'd3
-`define DAU_SYM_TYPE_OPERATOR 3'd3
-`define DAU_SYM_TYPE_SPECIAL  3'd4
+`define DAU_SYM_NEW_LINE  5'h0A
+`define DAU_SYM_RESET     5'h07
 
 `endif

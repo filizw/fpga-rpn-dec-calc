@@ -9,8 +9,8 @@ module top (
     output wire o_tx
 );
 
-    localparam NUM_DIGITS  = 10;
-    localparam STACK_DEPTH = 7;
+    localparam NUM_DIGITS  = 20;
+    localparam STACK_DEPTH = 6;
 
     wire [`DAU_SYM_WIDTH-1:0] tx_fifo_wr_data;
     wire [`DAU_SYM_WIDTH-1:0] tx_fifo_rd_data;
@@ -21,7 +21,7 @@ module top (
 
     fifo #(
         .DATA_WIDTH(`DAU_SYM_WIDTH),
-        .DEPTH(NUM_DIGITS + 2)
+        .DEPTH(NUM_DIGITS + 6)
     ) fifo_inst (
         .i_clk(i_clk),
         .i_rst(i_rst),
@@ -38,12 +38,12 @@ module top (
 
     wire [`DAU_SYM_WIDTH-1:0] du_sym_in;
 
-    ascii_char_to_du_sym ascii_to_sym_inst (
+    ascii_char_to_dau_sym ascii_to_sym_inst (
         .i_char(ascii_char_in),
         .o_symbol(du_sym_in)
     );
 
-    du_sym_to_ascii_char sym_to_ascii_inst (
+    dau_sym_to_ascii_char sym_to_ascii_inst (
         .i_symbol(tx_fifo_rd_data),
         .o_char(ascii_char_out)
     );

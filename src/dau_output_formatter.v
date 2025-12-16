@@ -11,7 +11,7 @@ module dau_output_formatter #(
     input wire                       i_clk,
     input wire                       i_rst,
     input wire                       i_loopback_en,
-    input wire  [`DAU_SYM_WIDTH-1:0] i_symbol,
+    input wire  [`DAU_SYM_WIDTH-1:0] i_loopback_symbol,
     input wire                       i_stream_start,
     input wire                       i_sign,
     input wire     [COMMA_WIDTH-1:0] i_comma,
@@ -25,12 +25,13 @@ module dau_output_formatter #(
     output wire                      o_stream_done
 );
     
-    localparam STATE_WIDTH = 2;
+    localparam STATE_WIDTH = 3;
 
     localparam STATE_LOOPBACK = 0,
-               STATE_WAIT     = 1,
-               STATE_STREAM   = 2,
-               STATE_DONE     = 3;
+               STATE_NEW_LINE = 1,
+               STATE_SIGN     = 2,
+               STATE_DIGITS   = 3,
+               STATE_DONE     = 4;
     
     reg [STATE_WIDTH-1:0] state_reg, state_next;
 
@@ -41,12 +42,12 @@ module dau_output_formatter #(
     reg [SHIFT_AMT_WIDTH-1:0] shift_amt_reg, shift_amt_next;
 
     assign o_bcdu_instr       = {`BCDU_OP_SHR, i_bcdu_addr, 2'b00, {6-SHIFT_AMT_WIDTH{1'b0}}, shift_amt_reg};
-    assign o_bcdu_instr_valid = ((state_reg == STATE_STREAM) && (shift_amt_reg != 0));
+    assign o_bcdu_instr_valid = ((state_reg == STATE_DIGITS) && (shift_amt_reg != 0));
 
-    reg got_msd_reg, got_msd_next;
+    reg  got_msd_reg, got_msd_next;
     wire got_msd = (got_msd_reg ? 1'b1 : got_msd_next);
 
-    reg got_comma_reg, got_comma_next;
+    reg  got_comma_reg, got_comma_next;
     wire got_comma = (got_comma_reg ? 1'b1 : got_comma_next);
 
     reg [`DAU_SYM_WIDTH-1:0] symbol_buf_reg, symbol_buf_next;
@@ -59,6 +60,18 @@ module dau_output_formatter #(
     assign o_stream_done = (state_reg == STATE_DONE);
 
     wire zero_left = ((i_bcdu_digit == 4'd0) && !i_bcdu_flags[`BCDU_TF]);
+
+    reg zero_left_reg;
+
+    initial begin
+        zero_left_reg <= 1'b0;
+    end
+
+    always @(posedge i_clk) begin
+        if (i_rst) zero_left_reg <= 1'b0;
+        else if ((state_reg == STATE_DIGITS) && !zero_left_reg) zero_left_reg <= zero_left;
+        else if (state_reg == STATE_LOOPBACK) zero_left_reg <= 1'b0;
+    end
 
     function automatic [`DAU_SYM_WIDTH-1:0] digit_to_symbol;
         input [3:0] digit;
@@ -83,26 +96,30 @@ module dau_output_formatter #(
                 got_comma_next = 1'b0;
 
                 if (i_loopback_en) begin
-                    symbol_out_next       = i_symbol;
+                    symbol_out_next       = i_loopback_symbol;
                     symbol_out_valid_next = 1'b1;
                 end
 
-                if (i_stream_start) begin
-                    if (i_bcdu_digit == 4'hF) state_next = STATE_STREAM;
-                    else                      state_next = STATE_WAIT;
+                if (i_stream_start) state_next = STATE_NEW_LINE;
+            end
 
-                    if (i_sign == 1'b1) begin
-                        symbol_out_next       = `DAU_SYM_MINUS;
-                        symbol_out_valid_next = 1'b1;
-                    end
+            STATE_NEW_LINE: begin
+                symbol_out_next       = `DAU_SYM_NEW_LINE;
+                symbol_out_valid_next = 1'b1;
+
+                state_next = STATE_SIGN;
+            end
+
+            STATE_SIGN: begin
+                if (i_sign == 1'b1) begin
+                    symbol_out_next       = `DAU_SYM_MINUS;
+                    symbol_out_valid_next = 1'b1;
                 end
+
+                state_next = STATE_DIGITS;
             end
 
-            STATE_WAIT: begin
-                if (i_bcdu_digit == 4'hF) state_next = STATE_STREAM;
-            end
-
-            STATE_STREAM: begin
+            STATE_DIGITS: begin
                 if (shift_amt_reg != 0) shift_amt_next = (shift_amt_reg - 1);
 
                 if (i_bcdu_digit != 4'hF) begin
@@ -135,7 +152,7 @@ module dau_output_formatter #(
             STATE_DONE: begin
                 state_next = STATE_LOOPBACK;
 
-                if (got_comma_reg && !zero_left) begin
+                if (got_comma_reg && !zero_left_reg) begin
                     symbol_out_next       = symbol_buf_reg;
                     symbol_out_valid_next = 1'b1;
                 end
