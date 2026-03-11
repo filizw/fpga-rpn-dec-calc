@@ -1,22 +1,22 @@
 `timescale 1ns / 1ps
 
-`include "dau_symbols.vh"
+`include "symbols.vh"
 `include "bcdu_op_codes.vh"
 
-module dau_input_decoder #(
+module dau_input_interpreter #(
     parameter NUM_DIGITS  = 4,
     parameter STACK_DEPTH = 7
 )(
     input wire                       i_clk,
     input wire                       i_rst,
     input wire                       i_valid,
-    input wire  [`DAU_SYM_WIDTH-1:0] i_symbol,
+    input wire  [`SYM_WIDTH-1:0] i_symbol,
     input wire                 [3:0] i_stack_ptr,
     input wire                       i_operation_done,
     output wire                      o_bcdu_instr_valid,
     output wire               [15:0] o_bcdu_instr,
     output wire                      o_loopback_en,
-    output wire [`DAU_SYM_WIDTH-1:0] o_loopback_symbol,
+    output wire [`SYM_WIDTH-1:0] o_loopback_symbol,
     output wire                      o_print_start,
     output wire                      o_add_start,
     output wire                      o_sub_start,
@@ -32,7 +32,7 @@ module dau_input_decoder #(
 
     localparam DIGIT_CNT_WIDTH = $clog2(NUM_DIGITS / 2 + 1);
 
-    reg [`DAU_SYM_WIDTH-1:0] symbol_buf_reg, symbol_buf_next;
+    reg [`SYM_WIDTH-1:0] symbol_buf_reg, symbol_buf_next;
 
     reg [DIGIT_CNT_WIDTH-1:0] digit_cnt_reg, digit_cnt_next;
 
@@ -52,7 +52,7 @@ module dau_input_decoder #(
     assign o_bcdu_instr       = bcdu_instr_reg;
 
     reg                      loopback_en_reg, loopback_en_next;
-    reg [`DAU_SYM_WIDTH-1:0] loopback_symbol_reg, loopback_symbol_next;
+    reg [`SYM_WIDTH-1:0] loopback_symbol_reg, loopback_symbol_next;
 
     assign o_loopback_en     = loopback_en_reg;
     assign o_loopback_symbol = loopback_symbol_reg;
@@ -99,7 +99,7 @@ module dau_input_decoder #(
         bcdu_instr_next       = {`BCDU_OP_NOP, 12'b0};
 
         loopback_en_next     = 1'b0;
-        loopback_symbol_next = `DAU_SYM_INVALID;
+        loopback_symbol_next = `SYM_INVALID;
 
         print_start_next = 1'b0;
         add_start_next   = 1'b0;
@@ -120,9 +120,9 @@ module dau_input_decoder #(
         if (i_operation_done) ready_next = 1'b1;
 
         if (clr_reg) begin
-            if (loopback_symbol_reg == `DAU_SYM_RESULT) begin
+            if (loopback_symbol_reg == `SYM_RESULT) begin
                 loopback_en_next     = 1'b1;
-                loopback_symbol_next = `DAU_SYM_NEW_LINE;
+                loopback_symbol_next = `SYM_NEW_LINE;
             end
 
             if (i_stack_ptr == 0) internal_rst_next = 1'b1;
@@ -136,19 +136,19 @@ module dau_input_decoder #(
         end
 
         if (i_valid && ready_reg) begin
-            if ((i_symbol >= `DAU_SYM_0) && (i_symbol <= `DAU_SYM_9) && (symbol_buf_reg != `DAU_SYM_RESULT) && (i_stack_ptr != STACK_DEPTH)) begin
+            if ((i_symbol >= `SYM_0) && (i_symbol <= `SYM_9) && (symbol_buf_reg != `SYM_RESULT) && (i_stack_ptr != STACK_DEPTH)) begin
                 if (digit_cnt_reg < (NUM_DIGITS / 2)) begin
                     digit_cnt_next = (digit_cnt_reg + 1);
 
                     bcdu_instr_valid_next = 1'b1;
-                    bcdu_instr_next       = {`BCDU_OP_SHL, i_stack_ptr, 2'b11, {6-`DAU_SYM_WIDTH{1'b0}}, i_symbol};
+                    bcdu_instr_next       = {`BCDU_OP_SHL, i_stack_ptr, 2'b11, {6-`SYM_WIDTH{1'b0}}, i_symbol};
 
                     loopback_en_next     = 1'b1;
                     loopback_symbol_next = i_symbol;
 
                     if (got_comma_reg) comma_inc_next = 1'b1;
 
-                    if ((symbol_buf_reg == `DAU_SYM_MINUS) && !got_sign_reg) begin
+                    if ((symbol_buf_reg == `SYM_MINUS) && !got_sign_reg) begin
                         got_sign_next = 1'b1;
 
                         sign_set_next = 1'b1;
@@ -156,30 +156,30 @@ module dau_input_decoder #(
 
                     symbol_buf_next = i_symbol;
                 end
-            end else if ((i_symbol == `DAU_SYM_COMMA) && !got_comma_reg) begin
+            end else if ((i_symbol == `SYM_COMMA) && !got_comma_reg) begin
                 got_comma_next = 1'b1;
 
                 loopback_en_next     = 1'b1;
                 loopback_symbol_next = i_symbol;
 
-                if ((symbol_buf_reg == `DAU_SYM_MINUS) && !got_sign_reg) begin
+                if ((symbol_buf_reg == `SYM_MINUS) && !got_sign_reg) begin
                     got_sign_next = 1'b1;
 
                     sign_set_next = 1'b1;
                 end
 
                 symbol_buf_next = i_symbol;
-            end else if (((i_symbol == `DAU_SYM_PLUS) || (i_symbol == `DAU_SYM_MINUS)) && ((symbol_buf_reg == `DAU_SYM_INVALID) || (symbol_buf_reg == `DAU_SYM_SEPARATOR))) begin
+            end else if (((i_symbol == `SYM_PLUS) || (i_symbol == `SYM_MINUS)) && ((symbol_buf_reg == `SYM_INVALID) || (symbol_buf_reg == `SYM_SEPARATOR))) begin
                 loopback_en_next     = 1'b1;
                 loopback_symbol_next = i_symbol;
                 
                 symbol_buf_next = i_symbol;
-            end else if (((i_symbol == `DAU_SYM_MUL) || (i_symbol == `DAU_SYM_DIV)) && (symbol_buf_reg == `DAU_SYM_SEPARATOR)) begin
+            end else if (((i_symbol == `SYM_MUL) || (i_symbol == `SYM_DIV)) && (symbol_buf_reg == `SYM_SEPARATOR)) begin
                 loopback_en_next     = 1'b1;
                 loopback_symbol_next = i_symbol;
                 
                 symbol_buf_next = i_symbol;
-            end else if ((i_symbol == `DAU_SYM_SEPARATOR) && (symbol_buf_reg != `DAU_SYM_SEPARATOR) && (symbol_buf_reg != `DAU_SYM_INVALID)) begin
+            end else if ((i_symbol == `SYM_SEPARATOR) && (symbol_buf_reg != `SYM_SEPARATOR) && (symbol_buf_reg != `SYM_INVALID)) begin
                 if (i_stack_ptr != (STACK_DEPTH - 1)) begin
                     digit_cnt_next = 0;
                     got_comma_next = 1'b0;
@@ -189,20 +189,20 @@ module dau_input_decoder #(
                 loopback_en_next     = 1'b1;
                 loopback_symbol_next = i_symbol;
 
-                if ((((symbol_buf_reg >= `DAU_SYM_0) && (symbol_buf_reg <= `DAU_SYM_9)) || (symbol_buf_reg == `DAU_SYM_RESULT)) && (i_stack_ptr != STACK_DEPTH)) o_stack_ptr_next = (i_stack_ptr + 1);
+                if ((((symbol_buf_reg >= `SYM_0) && (symbol_buf_reg <= `SYM_9)) || (symbol_buf_reg == `SYM_RESULT)) && (i_stack_ptr != STACK_DEPTH)) o_stack_ptr_next = (i_stack_ptr + 1);
 
-                if (((symbol_buf_reg == `DAU_SYM_PLUS) || (symbol_buf_reg == `DAU_SYM_MINUS) || (symbol_buf_reg == `DAU_SYM_MUL) || (symbol_buf_reg == `DAU_SYM_DIV)) && (i_stack_ptr > 1)) begin
-                    add_start_next = (symbol_buf_reg == `DAU_SYM_PLUS);
-                    sub_start_next = (symbol_buf_reg == `DAU_SYM_MINUS);
-                    mul_start_next = (symbol_buf_reg == `DAU_SYM_MUL);
-                    div_start_next = (symbol_buf_reg == `DAU_SYM_DIV);
+                if (((symbol_buf_reg == `SYM_PLUS) || (symbol_buf_reg == `SYM_MINUS) || (symbol_buf_reg == `SYM_MUL) || (symbol_buf_reg == `SYM_DIV)) && (i_stack_ptr > 1)) begin
+                    add_start_next = (symbol_buf_reg == `SYM_PLUS);
+                    sub_start_next = (symbol_buf_reg == `SYM_MINUS);
+                    mul_start_next = (symbol_buf_reg == `SYM_MUL);
+                    div_start_next = (symbol_buf_reg == `SYM_DIV);
                     ready_next     = 1'b0;
 
                     if (i_stack_ptr != 0) o_stack_ptr_next = (i_stack_ptr - 1);
                 end
 
                 symbol_buf_next = i_symbol;
-            end else if ((i_symbol == `DAU_SYM_RESULT) && (symbol_buf_reg == `DAU_SYM_SEPARATOR)) begin
+            end else if ((i_symbol == `SYM_RESULT) && (symbol_buf_reg == `SYM_SEPARATOR)) begin
                 loopback_en_next     = 1'b1;
                 loopback_symbol_next = i_symbol;
 
@@ -213,9 +213,9 @@ module dau_input_decoder #(
                 o_stack_ptr_next = (i_stack_ptr - 1);
 
                 symbol_buf_next = i_symbol;
-            end else if (i_symbol == `DAU_SYM_RESET) begin
+            end else if (i_symbol == `SYM_RESET) begin
                 loopback_en_next     = 1'b1;
-                loopback_symbol_next = `DAU_SYM_RESULT;
+                loopback_symbol_next = `SYM_RESULT;
 
                 clr_next = 1'b1;
 
@@ -226,7 +226,7 @@ module dau_input_decoder #(
 
     always @(posedge i_clk) begin
         if (i_rst || internal_rst_reg) begin
-            symbol_buf_reg   <= `DAU_SYM_INVALID;
+            symbol_buf_reg   <= `SYM_INVALID;
             digit_cnt_reg    <= 0;
             got_comma_reg    <= 1'b0;
             got_sign_reg     <= 1'b0;
@@ -239,7 +239,7 @@ module dau_input_decoder #(
             bcdu_instr_reg       <= {`BCDU_OP_NOP, 12'b0};
 
             loopback_en_reg     <= 1'b0;
-            loopback_symbol_reg <= `DAU_SYM_INVALID;
+            loopback_symbol_reg <= `SYM_INVALID;
 
             print_start_reg <= 1'b0;
             add_start_reg   <= 1'b0;

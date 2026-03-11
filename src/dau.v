@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-`include "dau_symbols.vh"
+`include "symbols.vh"
 `include "bcdu_flags.vh"
 
 module dau #(
@@ -10,8 +10,8 @@ module dau #(
     input wire                       i_clk,
     input wire                       i_rst,
     input wire                       i_valid,
-    input wire  [`DAU_SYM_WIDTH-1:0] i_symbol,
-    output wire [`DAU_SYM_WIDTH-1:0] o_symbol,
+    input wire  [`SYM_WIDTH-1:0] i_symbol,
+    output wire [`SYM_WIDTH-1:0] o_symbol,
     output wire                      o_symbol_valid,
     output wire                      o_ready
 );
@@ -71,7 +71,7 @@ module dau #(
     wire [15:0] inp_dec_bcdu_instr;
 
     wire                      loopback_en;
-    wire [`DAU_SYM_WIDTH-1:0] loopback_symbol;
+    wire [`SYM_WIDTH-1:0] loopback_symbol;
 
     wire print_start;
     wire print_done;
@@ -109,7 +109,7 @@ module dau #(
 
     wire op_done = print_done | add_sub_done | mul_done | div_done;
 
-    dau_input_decoder #(
+    dau_input_interpreter #(
         .NUM_DIGITS(NUM_DIGITS),
         .STACK_DEPTH(STACK_DEPTH)
     ) inp_dec_inst (

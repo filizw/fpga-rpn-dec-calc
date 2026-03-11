@@ -156,7 +156,7 @@ module dau_add_sub_seq #(
                     n_instr       = {`BCDU_OP_CLR, r_digits_addr_b, 8'b0};
 
                     if (!i_gt_flag && subtract) n_state = S_CORRECT;
-                    else                                n_state = S_IDLE;
+                    else                        n_state = S_IDLE;
                 end
 
                 S_CORRECT: begin

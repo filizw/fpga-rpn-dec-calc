@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-`include "dau_symbols.vh"
+`include "symbols.vh"
 `include "bcdu_op_codes.vh"
 `include "bcdu_flags.vh"
 
@@ -11,7 +11,7 @@ module dau_output_formatter #(
     input wire                       i_clk,
     input wire                       i_rst,
     input wire                       i_loopback_en,
-    input wire  [`DAU_SYM_WIDTH-1:0] i_loopback_symbol,
+    input wire  [`SYM_WIDTH-1:0] i_loopback_symbol,
     input wire                       i_stream_start,
     input wire                       i_sign,
     input wire     [COMMA_WIDTH-1:0] i_comma,
@@ -20,7 +20,7 @@ module dau_output_formatter #(
     input wire [`BCDU_NUM_FLAGS-1:0] i_bcdu_flags,
     output wire               [15:0] o_bcdu_instr,
     output wire                      o_bcdu_instr_valid,
-    output wire [`DAU_SYM_WIDTH-1:0] o_symbol,
+    output wire [`SYM_WIDTH-1:0] o_symbol,
     output wire                      o_symbol_valid,
     output wire                      o_stream_done
 );
@@ -50,8 +50,8 @@ module dau_output_formatter #(
     reg  got_comma_reg, got_comma_next;
     wire got_comma = (got_comma_reg ? 1'b1 : got_comma_next);
 
-    reg [`DAU_SYM_WIDTH-1:0] symbol_buf_reg, symbol_buf_next;
-    reg [`DAU_SYM_WIDTH-1:0] symbol_out_reg, symbol_out_next;
+    reg [`SYM_WIDTH-1:0] symbol_buf_reg, symbol_buf_next;
+    reg [`SYM_WIDTH-1:0] symbol_out_reg, symbol_out_next;
     reg                      symbol_out_valid_reg, symbol_out_valid_next;
 
     assign o_symbol       = symbol_out_reg;
@@ -73,9 +73,9 @@ module dau_output_formatter #(
         else if (state_reg == STATE_LOOPBACK) zero_left_reg <= 1'b0;
     end
 
-    function automatic [`DAU_SYM_WIDTH-1:0] digit_to_symbol;
+    function automatic [`SYM_WIDTH-1:0] digit_to_symbol;
         input [3:0] digit;
-        digit_to_symbol = {{`DAU_SYM_WIDTH-4{1'b1}}, digit};
+        digit_to_symbol = {{`SYM_WIDTH-4{1'b1}}, digit};
     endfunction
 
     always @* begin
@@ -104,7 +104,7 @@ module dau_output_formatter #(
             end
 
             STATE_NEW_LINE: begin
-                symbol_out_next       = `DAU_SYM_NEW_LINE;
+                symbol_out_next       = `SYM_NEW_LINE;
                 symbol_out_valid_next = 1'b1;
 
                 state_next = STATE_SIGN;
@@ -112,7 +112,7 @@ module dau_output_formatter #(
 
             STATE_SIGN: begin
                 if (i_sign == 1'b1) begin
-                    symbol_out_next       = `DAU_SYM_MINUS;
+                    symbol_out_next       = `SYM_MINUS;
                     symbol_out_valid_next = 1'b1;
                 end
 
@@ -131,7 +131,7 @@ module dau_output_formatter #(
                         got_comma_next = 1'b1;
 
                         symbol_buf_next = digit_to_symbol(i_bcdu_digit);
-                        symbol_out_next = `DAU_SYM_COMMA;
+                        symbol_out_next = `SYM_COMMA;
 
                         if (!zero_left) symbol_out_valid_next = 1'b1;
                     end else if (got_msd_reg || got_msd_next) begin
@@ -167,8 +167,8 @@ module dau_output_formatter #(
             shift_amt_reg        <= NUM_DIGITS;
             got_msd_reg          <= 1'b0;
             got_comma_reg        <= 1'b0;
-            symbol_buf_reg       <= `DAU_SYM_INVALID;
-            symbol_out_reg       <= `DAU_SYM_INVALID;
+            symbol_buf_reg       <= `SYM_INVALID;
+            symbol_out_reg       <= `SYM_INVALID;
             symbol_out_valid_reg <= 1'b0;
         end else begin
             state_reg            <= state_next;
