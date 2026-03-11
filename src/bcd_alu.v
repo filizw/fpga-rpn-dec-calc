@@ -2,29 +2,51 @@
 
 `include "bcd_alu_op_codes.vh"
 
+// ============================================================================
+// BCD Arithmetic Logic Unit (ALU)
+// ============================================================================
+// Integrates BCD arithmetic components: left/right shifters, adder, comparator.
+// Routes operands to selected operation and outputs results with status flags.
+
 module bcd_alu #(
-    parameter NUM_DIGITS      = 4,
-    parameter SHIFT_AMT_WIDTH = $clog2(NUM_DIGITS + 1)
+    parameter NUM_DIGITS      = 4,                          // Number of BCD digits
+    parameter SHIFT_AMT_WIDTH = $clog2(NUM_DIGITS + 1)      // Width for shift amount
 )(
-    input wire [`BCD_ALU_OP_CODE_WIDTH-1:0] i_op_code,
-    input wire        [SHIFT_AMT_WIDTH-1:0] i_shl_amt,
-    input wire        [SHIFT_AMT_WIDTH-1:0] i_shr_amt,
-    input wire                        [3:0] i_shl_digit,
-    input wire                        [3:0] i_shr_digit,
-    input wire                              i_add_cin,
-    input wire           [NUM_DIGITS*4-1:0] i_num_a,
-    input wire           [NUM_DIGITS*4-1:0] i_num_b,
-    output reg           [NUM_DIGITS*4-1:0] o_num,
-    output wire                       [3:0] o_shl_digit,
-    output wire                       [3:0] o_shr_digit,
-    output wire                             o_shl_zero,
-    output wire                             o_shr_zero,
-    output wire                             o_add_zero,
-    output wire                             o_add_cout,
-    output wire                             o_cmp_gt,
-    output wire                             o_cmp_eq
+    // Control inputs
+    input wire [`BCD_ALU_OP_CODE_WIDTH-1:0] i_op_code,      // Operation code
+    
+    // Shift inputs
+    input wire        [SHIFT_AMT_WIDTH-1:0] i_shl_amt,      // Left shift amount
+    input wire        [SHIFT_AMT_WIDTH-1:0] i_shr_amt,      // Right shift amount
+    input wire                        [3:0] i_shl_digit,    // Digit for left shift
+    input wire                        [3:0] i_shr_digit,    // Digit for right shift
+    
+    // Addition inputs
+    input wire                              i_add_cin,      // Add carry in
+    
+    // Operands
+    input wire           [NUM_DIGITS*4-1:0] i_num_a,        // Operand A
+    input wire           [NUM_DIGITS*4-1:0] i_num_b,        // Operand B
+    
+    // Result outputs
+    output reg           [NUM_DIGITS*4-1:0] o_num,          // Operation result
+    
+    // Shift outputs
+    output wire                       [3:0] o_shl_digit,    // Shifted digit (left)
+    output wire                       [3:0] o_shr_digit,    // Shifted digit (right)
+    output wire                             o_shl_zero,     // Left shift result zero
+    output wire                             o_shr_zero,     // Right shift result zero
+    
+    // Addition outputs
+    output wire                             o_add_zero,     // Add result zero
+    output wire                             o_add_cout,     // Add carry out
+    
+    // Comparison outputs
+    output wire                             o_cmp_gt,       // Greater than
+    output wire                             o_cmp_eq        // Equal
 );
 
+    // Left Shift
     wire [NUM_DIGITS*4-1:0] shl_num_out;
 
     assign o_shl_zero = (shl_num_out == 0);
@@ -40,6 +62,7 @@ module bcd_alu #(
         .o_digit(o_shl_digit)
     );
 
+    // Right Shift
     wire [NUM_DIGITS*4-1:0] shr_num_out;
 
     assign o_shr_zero = (shr_num_out == 0);
@@ -55,6 +78,7 @@ module bcd_alu #(
         .o_digit(o_shr_digit)
     );
 
+    // Addition
     wire [NUM_DIGITS*4-1:0] add_num_out;
 
     assign o_add_zero = (add_num_out == 0);
@@ -69,6 +93,7 @@ module bcd_alu #(
         .o_carry(o_add_cout)
     );
 
+    // Comparison
     bcd_comparator #(
         .NUM_DIGITS(NUM_DIGITS)
     ) cmp_inst (
@@ -78,6 +103,7 @@ module bcd_alu #(
         .o_eq(o_cmp_eq)
     );
 
+    // Select and output result based on operation code
     always @* begin
         o_num = 0;
 

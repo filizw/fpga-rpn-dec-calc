@@ -1,42 +1,61 @@
 `timescale 1ns / 1ps
 
+// ============================================================================
+// BCD Adder
+// ============================================================================
+// Adds two BCD numbers with carry lookahead logic.
+// Produces corrected BCD result and carry output.
+
 module bcd_adder #(
-    parameter NUM_DIGITS = 4
+    parameter NUM_DIGITS = 4                // Number of BCD digits
 )(
-    input wire  [NUM_DIGITS*4-1:0] i_num_a,
-    input wire  [NUM_DIGITS*4-1:0] i_num_b,
-    input wire                     i_carry,
-    output wire [NUM_DIGITS*4-1:0] o_num,
-    output wire                    o_carry
+    input wire  [NUM_DIGITS*4-1:0] i_num_a, // Operand A
+    input wire  [NUM_DIGITS*4-1:0] i_num_b, // Operand B
+    input wire                     i_carry, // Carry input
+    output wire [NUM_DIGITS*4-1:0] o_num,   // Sum output
+    output wire                    o_carry  // Carry output
 );
 
+    // Intermediate sum (5 bits per digit to capture overflow)
     wire [4:0] S [NUM_DIGITS-1:0];
 
+    // Generate and Propagate flags for carry lookahead
     wire [NUM_DIGITS-1:0] G;
     wire [NUM_DIGITS-1:0] P;
-    wire   [NUM_DIGITS:0] C;
+    
+    // Carry chain
+    wire [NUM_DIGITS:0] C;
 
     assign C[0]    = i_carry;
     assign o_carry = C[NUM_DIGITS];
 
     genvar n, m;
 
+    // Stage 1: Binary Addition and Generate/Propagate Flags
     generate
         for (n = 0; n < NUM_DIGITS; n = n + 1) begin
+            // Binary sum of digit pair
             assign S[n] = (i_num_a[4*n+:4] + i_num_b[4*n+:4]);
+            
+            // Generate: sum exceeds 9 (needs correction)
             assign G[n] = (S[n] > 5'd9);
+            
+            // Propagate: sum equals 9 (can propagate carry from lower digits)
             assign P[n] = (S[n] == 5'd9);
         end
     endgenerate
 
+    // Stage 2: Carry Lookahead Logic
     generate
         for (n = 0; n < NUM_DIGITS; n = n + 1) begin
             reg [n:0] and_terms;
 
             for (m = 0; m <= n; m = m + 1) begin
                 always @* begin
-                    if (m == n) and_terms[m] = (&P[n:0] & C[0]);
-                    else        and_terms[m] = (&P[n:n-m] & G[n-m-1]);
+                    if (m == n) 
+                        and_terms[m] = (&P[n:0] & C[0]);
+                    else        
+                        and_terms[m] = (&P[n:n-m] & G[n-m-1]);
                 end
             end
 
@@ -44,6 +63,8 @@ module bcd_adder #(
         end
     endgenerate
 
+    // Stage 3: BCD Correction
+    // Add 6 to results that need correction (when sum > 9 or carry generated)
     generate
         for (n = 0; n < NUM_DIGITS; n = n + 1) begin
             wire       correct = (G[n] | P[n] & C[n]);
