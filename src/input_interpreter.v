@@ -3,7 +3,7 @@
 `include "symbols.vh"
 `include "bcdu_op_codes.vh"
 
-module dau_input_interpreter #(
+module input_interpreter #(
     parameter NUM_DIGITS  = 4,
     parameter STACK_DEPTH = 7
 )(

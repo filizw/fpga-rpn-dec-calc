@@ -4,7 +4,7 @@
 `include "bcdu_op_codes.vh"
 `include "bcdu_flags.vh"
 
-module dau_output_formatter #(
+module output_formatter #(
     parameter NUM_DIGITS  = 4,
     parameter COMMA_WIDTH = 2
 )(

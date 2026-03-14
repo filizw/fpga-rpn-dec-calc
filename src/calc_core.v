@@ -3,7 +3,7 @@
 `include "symbols.vh"
 `include "bcdu_flags.vh"
 
-module dau #(
+module calc_core #(
     parameter NUM_DIGITS  = 4,
     parameter STACK_DEPTH = 7
 )(
@@ -109,10 +109,10 @@ module dau #(
 
     wire op_done = print_done | add_sub_done | mul_done | div_done;
 
-    dau_input_interpreter #(
+    input_interpreter #(
         .NUM_DIGITS(NUM_DIGITS),
         .STACK_DEPTH(STACK_DEPTH)
-    ) inp_dec_inst (
+    ) u_input_interpreter (
         .i_clk(i_clk),
         .i_rst(i_rst),
         .i_valid(i_valid),
@@ -139,10 +139,10 @@ module dau #(
     wire        out_fmt_bcdu_instr_valid;
     wire [15:0] out_fmt_bcdu_instr;
 
-    dau_output_formatter #(
+    output_formatter #(
         .NUM_DIGITS(NUM_DIGITS),
         .COMMA_WIDTH(COMMA_WIDTH)
-    ) out_fmt_inst (
+    ) u_output_formatter (
         .i_clk(i_clk),
         .i_rst(i_rst),
         .i_loopback_en(loopback_en),
@@ -167,7 +167,7 @@ module dau #(
     wire [COMMA_WIDTH-1:0] add_sub_comma_pos;
     wire add_sub_ready;
 
-    dau_add_sub_seq #(
+    add_sub_seq #(
         .COMMA_POS_W(COMMA_WIDTH)
     ) u_add_sub_seq (
         .i_clk(i_clk),
@@ -198,7 +198,7 @@ module dau #(
     wire [COMMA_WIDTH-1:0] mul_comma_pos;
     wire mul_ready;
 
-    dau_mul_seq #(
+    mul_seq #(
         .N_DIGITS(NUM_DIGITS),
         .COMMA_POS_W(COMMA_WIDTH),
         .ACC_ADDR(STACK_DEPTH)
@@ -228,7 +228,7 @@ module dau #(
     wire [COMMA_WIDTH-1:0] div_comma_pos;
     wire div_ready;
 
-    dau_div_seq #(
+    div_seq #(
         .N_DIGITS(NUM_DIGITS),
         .COMMA_POS_W(COMMA_WIDTH),
         .REM_ADDR(STACK_DEPTH),

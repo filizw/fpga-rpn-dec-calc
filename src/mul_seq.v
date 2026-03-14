@@ -2,7 +2,7 @@
 
 `include "bcdu_op_codes.vh"
 
-module dau_mul_seq #(
+module mul_seq #(
     parameter       N_DIGITS    = 4,
     parameter       COMMA_POS_W = 4,
     parameter [3:0] ACC_ADDR    = 7

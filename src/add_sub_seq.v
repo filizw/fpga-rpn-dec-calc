@@ -3,7 +3,7 @@
 `include "bcdu_op_codes.vh"
 `include "bcdu_flags.vh"
 
-module dau_add_sub_seq #(
+module add_sub_seq #(
     parameter COMMA_POS_W = 4
 )(
     input wire                    i_clk,

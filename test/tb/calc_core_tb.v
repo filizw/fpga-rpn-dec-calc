@@ -2,7 +2,7 @@
 
 `include "test/tb/common.vh"
 
-module dau_tb ();
+module calc_core_tb ();
     
     localparam T = 10;
 
@@ -17,7 +17,7 @@ module dau_tb ();
     wire                      o_symbol_valid;
     wire                      o_ready;
 
-    dau #(
+    calc_core #(
         .NUM_DIGITS(NUM_DIGITS),
         .STACK_DEPTH(STACK_DEPTH)
     ) uut (
@@ -33,7 +33,7 @@ module dau_tb ();
     always #(T/2) i_clk = ~i_clk;
 
     initial begin
-        `TEST_START("dau", "out/vcd/dau_tb.vcd", dau_tb)
+        `TEST_START("calc_core", "out/vcd/calc_core_tb.vcd", calc_core_tb)
 
         i_clk    = 1'b0;
         i_rst    = 1'b1;
@@ -330,7 +330,7 @@ module dau_tb ();
 
         #200;
 
-        `TEST_END("dau")
+        `TEST_END("calc_core")
     end
 
 endmodule

@@ -22,7 +22,7 @@ module top (
     fifo #(
         .DATA_WIDTH(`SYM_WIDTH),
         .DEPTH(NUM_DIGITS + 6)
-    ) fifo_inst (
+    ) u_fifo (
         .i_clk(i_clk),
         .i_rst(i_rst),
         .i_rd(tx_fifo_rd),
@@ -38,22 +38,22 @@ module top (
 
     wire [`SYM_WIDTH-1:0] du_sym_in;
 
-    ascii_to_sym ascii_to_sym_inst (
+    ascii_to_sym u_ascii_to_sym (
         .i_char(ascii_char_in),
         .o_symbol(du_sym_in)
     );
 
-    sym_to_ascii sym_to_ascii_inst (
+    sym_to_ascii u_sym_to_ascii (
         .i_symbol(tx_fifo_rd_data),
         .o_char(ascii_char_out)
     );
 
     wire du_sym_in_valid;
 
-    dau #(
+    calc_core #(
         .NUM_DIGITS(NUM_DIGITS),
         .STACK_DEPTH(STACK_DEPTH)
-    ) dau_inst (
+    ) u_calc_core (
         .i_clk(i_clk),
         .i_rst(i_rst),
         .i_valid(du_sym_in_valid),
@@ -63,7 +63,7 @@ module top (
         .o_ready()
     );
     
-    uart uart_inst (
+    uart u_uart (
         .i_clk(i_clk),
         .i_rst(i_rst),
         .i_rx(i_rx),
