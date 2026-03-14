@@ -54,7 +54,7 @@ module bcd_alu #(
     bcd_left_shifter #(
         .NUM_DIGITS(NUM_DIGITS),
         .NUM_STAGES(SHIFT_AMT_WIDTH)
-    ) shl_inst (
+    ) u_shl (
         .i_num(i_num_a),
         .i_digit(i_shl_digit),
         .i_amt(i_shl_amt),
@@ -70,7 +70,7 @@ module bcd_alu #(
     bcd_right_shifter #(
         .NUM_DIGITS(NUM_DIGITS),
         .NUM_STAGES(SHIFT_AMT_WIDTH)
-    ) shr_inst (
+    ) u_shr (
         .i_num(i_num_a),
         .i_digit(i_shr_digit),
         .i_amt(i_shr_amt),
@@ -85,7 +85,7 @@ module bcd_alu #(
 
     bcd_adder #(
         .NUM_DIGITS(NUM_DIGITS)
-    ) add_inst (
+    ) u_add (
         .i_num_a(i_num_a),
         .i_num_b(i_num_b),
         .i_carry(i_add_cin),
@@ -96,7 +96,7 @@ module bcd_alu #(
     // Comparison
     bcd_comparator #(
         .NUM_DIGITS(NUM_DIGITS)
-    ) cmp_inst (
+    ) u_cmp (
         .i_num_a(i_num_a),
         .i_num_b(i_num_b),
         .o_gt(o_cmp_gt),

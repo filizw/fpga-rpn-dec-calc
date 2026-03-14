@@ -135,7 +135,7 @@ module dau_mul_seq #(
                 S_START_ACC: begin
                     n_state       = S_WAIT;
                     n_instr_valid = 1'b1;
-                    n_instr       = {`BCDU_OP_ACA, ACC_ADDR, r_digits_addr_a, 4'b0};
+                    n_instr       = {`BCDU_OP_ACC, ACC_ADDR, r_digits_addr_a, 4'b0};
                 end
 
                 S_WAIT: begin

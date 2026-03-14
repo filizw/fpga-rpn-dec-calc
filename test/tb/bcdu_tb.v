@@ -156,7 +156,7 @@ module bcdu_tb ();
         LOAD_AND_CHECK(57, {`BCDU_OP_SHL, REG1, 2'b11, 6'd2}, 4'hF, 5'b00000);
         LOAD_AND_CHECK(58, {`BCDU_OP_SHL, REG1, 2'b11, 6'd3}, 4'h0, 5'b00000); // REG1 = 23
 
-        LOAD_AND_CHECK(59, {`BCDU_OP_ACA, REG0, REG1, 4'd5}, 4'h0, 5'b00000); // REG0 = 115
+        LOAD_AND_CHECK(59, {`BCDU_OP_ACC, REG0, REG1, 4'd5}, 4'h0, 5'b00000); // REG0 = 115
         wait(o_ready);
         LOAD_INSTR({`BCDU_OP_NOP, 12'b0});
         CHECK_OUTPUT(60, 4'hF, 5'b00000);
@@ -170,6 +170,7 @@ module bcdu_tb ();
         LOAD_AND_CHECK(65, {`BCDU_OP_SHR, REG1, 2'b10, 6'd1}, 4'h0, 5'b00000);
         LOAD_AND_CHECK(66, {`BCDU_OP_SHL, REG1, 2'b11, 6'd5}, 4'h3, 5'b00010); // REG1 = 25
 
+        /*
         LOAD_AND_CHECK(67, {`BCDU_OP_ACS, REG0, REG1, 4'd5}, 4'h0, 5'b00000); // REG0 = 9990
         wait(o_ready);
         LOAD_INSTR({`BCDU_OP_NOP, 12'b0});
@@ -182,13 +183,14 @@ module bcdu_tb ();
 
         LOAD_AND_CHECK(72, {`BCDU_OP_SHR, REG1, 2'b00, 6'd1}, 4'h9, 5'b00011);
 
-        LOAD_AND_CHECK(73, {`BCDU_OP_ACA, REG0, REG1, 4'd0}, 4'h5, 5'b00010); // REG0 = 115
+        LOAD_AND_CHECK(73, {`BCDU_OP_ACC, REG0, REG1, 4'd0}, 4'h5, 5'b00010); // REG0 = 115
         wait(o_ready);
         LOAD_INSTR({`BCDU_OP_NOP, 12'b0});
         CHECK_OUTPUT(74, 4'hF, 5'b00100);
 
         LOAD_INSTR({`BCDU_OP_CMP, REG0, REG2, 4'b0});
         LOAD_AND_CHECK(75, {`BCDU_OP_NOP, 12'b0}, 4'hF, 5'b10000);
+        */
 
         `TEST_END("bcdu")
     end

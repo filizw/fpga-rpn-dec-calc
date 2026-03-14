@@ -52,10 +52,8 @@ module bcd_adder #(
 
             for (m = 0; m <= n; m = m + 1) begin
                 always @* begin
-                    if (m == n) 
-                        and_terms[m] = (&P[n:0] & C[0]);
-                    else        
-                        and_terms[m] = (&P[n:n-m] & G[n-m-1]);
+                    if (m == n) and_terms[m] = (&P[n:0] & C[0]);
+                    else        and_terms[m] = (&P[n:n-m] & G[n-m-1]);
                 end
             end
 

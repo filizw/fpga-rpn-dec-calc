@@ -1,261 +1,293 @@
 `timescale 1ns / 1ps
 
+// ============================================================================
+// BCDU Controller
+// ============================================================================
+// Decodes 16-bit instructions and orchestrates the BCD Unit
+// (BCDU). Handles multi-cycle counting, register file addressing, and
+// generation of control signals for ALU operations, shifts, addition, and
+// flag updates.
+
 `include "bcd_alu_op_codes.vh"
 `include "bcdu_op_codes.vh"
 `include "bcdu_flags.vh"
 
 module bcdu_controller #(
-    parameter NUM_DIGITS      = 4,
-    parameter ADDR_WIDTH      = 2,
-    parameter SHIFT_AMT_WIDTH = 3
+    parameter NUM_DIGITS      = 4,      // Width of BCD operands
+    parameter ADDR_WIDTH      = 2,      // log2 register file size
+    parameter SHIFT_AMT_WIDTH = 3       // Bits needed for shift amount
 )(
-    input wire                               i_clk,
-    input wire                               i_rst,
-    input wire                               i_valid,
-    input wire                        [15:0] i_instr,
-    input wire                         [3:0] i_digit,
-    output wire                              o_wr_en,
-    output wire             [ADDR_WIDTH-1:0] o_wr_addr,
-    output wire             [ADDR_WIDTH-1:0] o_rd_addr_a,
-    output wire             [ADDR_WIDTH-1:0] o_rd_addr_b,
-    output wire                              o_ncp_en,
-    output wire [`BCD_ALU_OP_CODE_WIDTH-1:0] o_alu_op_code,
-    output wire        [SHIFT_AMT_WIDTH-1:0] o_shl_amt,
-    output wire        [SHIFT_AMT_WIDTH-1:0] o_shr_amt,
-    output wire                        [3:0] o_shl_digit,
-    output wire                        [3:0] o_shr_digit,
-    output wire                              o_add_cin,
-    output wire        [`BCDU_NUM_FLAGS-1:0] o_flags_mask,
-    output wire                              o_flags_save,
-    output wire                              o_ready
+    // Global control
+    input wire                               i_clk,         // Clock
+    input wire                               i_rst,         // Reset
+    input wire                               i_valid,       // Instruction valid
+    input wire                        [15:0] i_instr,       // Instruction
+    input wire                         [3:0] i_digit,       // Input digit for shift/accumulate
+
+    // Register file controls
+    output wire                              o_wr_en,       // Write enable
+    output wire             [ADDR_WIDTH-1:0] o_wr_addr,     // Write address
+    output wire             [ADDR_WIDTH-1:0] o_rd_addr_a,   // Read address A
+    output wire             [ADDR_WIDTH-1:0] o_rd_addr_b,   // Read address B
+
+    // 9's complementor controls
+    output wire                              o_ncp_en,      // 9's complement enable
+
+    // ALU control signals
+    output wire [`BCD_ALU_OP_CODE_WIDTH-1:0] o_alu_op_code, // ALU operation code
+    output wire        [SHIFT_AMT_WIDTH-1:0] o_shl_amt,     // Shift-left amount
+    output wire        [SHIFT_AMT_WIDTH-1:0] o_shr_amt,     // Shift-right amount
+    output wire                        [3:0] o_shl_digit,   // Digit for left shift
+    output wire                        [3:0] o_shr_digit,   // Digit for right shift
+    output wire                              o_add_cin,     // Add carry-in
+
+    // Flag controls
+    output wire        [`BCDU_NUM_FLAGS-1:0] o_flags_mask,  // Which flags to update
+    output wire                              o_flags_save,  // Store flag values
+
+    // Status
+    output wire                              o_ready        // Ready for next instr
 );
     
-    reg        mcycle_en_reg, mcycle_en_next;
-    reg        mcycle_cnt_ld_reg, mcycle_cnt_ld_next;
-    reg  [3:0] mcycle_cnt_reg, mcycle_cnt_next;
+    // Used by the ACC (accumulate) instruction to repeat operations multiple
+    // times. 'mcycle_en' enables counting, 'mcycle_cnt' holds remaining
+    // iterations and can be loaded with i_digit.
+    reg       r_mcycle_en, n_mcycle_en;
+    reg       r_mcycle_cnt_ld, n_mcycle_cnt_ld;
+    reg [3:0] r_mcycle_cnt, n_mcycle_cnt;
 
+    // Operation code field decoded from i_instr
     wire [`BCDU_OP_CODE_WIDTH-1:0] op_code = i_instr[15-:`BCDU_OP_CODE_WIDTH];
 
+    // Operand addresses encoded in instruction
     wire [ADDR_WIDTH-1:0] addr0 = i_instr[8+:ADDR_WIDTH];
     wire [ADDR_WIDTH-1:0] addr1 = i_instr[4+:ADDR_WIDTH];
     wire [ADDR_WIDTH-1:0] addr2 = i_instr[0+:ADDR_WIDTH];
 
-    wire                       shift_wr       = i_instr[7];
-    wire                       shift_digit_ld = i_instr[6];
-    wire                 [3:0] shift_digit    = i_instr[3:0];
-    wire [SHIFT_AMT_WIDTH-1:0] shift_amt      = i_instr[SHIFT_AMT_WIDTH-1:0];
-    wire [SHIFT_AMT_WIDTH-1:0] shift_inv_amt  = (NUM_DIGITS - shift_amt);
+    // Shift-specific fields
+    wire                       shift_wr       = i_instr[7];                     // Write enable
+    wire                       shift_digit_ld = i_instr[6];                     // Load digit instead of amount
+    wire                 [3:0] shift_digit    = i_instr[3:0];                   // Literal digit value
+    wire [SHIFT_AMT_WIDTH-1:0] shift_amt      = i_instr[SHIFT_AMT_WIDTH-1:0];   // Amount
+    wire [SHIFT_AMT_WIDTH-1:0] shift_inv_amt  = (NUM_DIGITS - shift_amt);       // Inverse
 
+    // Accumulate digit (same position as shift_digit)
     wire [3:0] acc_digit = i_instr[3:0];
 
-    wire sub = ((op_code == `BCDU_OP_SUB) || (op_code == `BCDU_OP_ACS));
+    // Flag used to bias ADD vs SUB operations
+    wire sub = (op_code == `BCDU_OP_SUB);
 
-    reg wr_en_reg, wr_en_next;
+    // Register-file address and enable registers
+    reg r_wr_en, n_wr_en;                              // Write enable
 
-    reg [ADDR_WIDTH-1:0] wr_addr_reg, wr_addr_next;
-    reg [ADDR_WIDTH-1:0] rd_addr_a_reg, rd_addr_a_next;
-    reg [ADDR_WIDTH-1:0] rd_addr_b_reg, rd_addr_b_next;
+    reg [ADDR_WIDTH-1:0] r_wr_addr, n_wr_addr;         // Writing address
+    reg [ADDR_WIDTH-1:0] r_rd_addr_a, n_rd_addr_a;     // Read port A address
+    reg [ADDR_WIDTH-1:0] r_rd_addr_b, n_rd_addr_b;     // Read port B address
 
-    assign o_wr_en     = wr_en_reg;
-    assign o_wr_addr   = wr_addr_reg;
-    assign o_rd_addr_a = (mcycle_en_reg ? rd_addr_a_reg : rd_addr_a_next);
-    assign o_rd_addr_b = (mcycle_en_reg ? rd_addr_b_reg : rd_addr_b_next);
+    // Outputs for register file control
+    assign o_wr_en     = r_wr_en;
+    assign o_wr_addr   = r_wr_addr;
+    assign o_rd_addr_a = (r_mcycle_en ? r_rd_addr_a : n_rd_addr_a);
+    assign o_rd_addr_b = (r_mcycle_en ? r_rd_addr_b : n_rd_addr_b);
 
-    reg ncp_en_reg, ncp_en_next;
+    // 9's complement enable register
+    reg r_ncp_en, n_ncp_en;
 
-    assign o_ncp_en = (mcycle_en_reg ? ncp_en_reg: ncp_en_next);
+    assign o_ncp_en = (r_mcycle_en ? r_ncp_en: n_ncp_en);
 
-    reg [`BCD_ALU_OP_CODE_WIDTH-1:0] alu_op_code_reg, alu_op_code_next;
+    // ALU operation code register
+    reg [`BCD_ALU_OP_CODE_WIDTH-1:0] r_alu_op_code, n_alu_op_code;
 
-    assign o_alu_op_code = alu_op_code_reg;
+    assign o_alu_op_code = r_alu_op_code;
 
-    reg [SHIFT_AMT_WIDTH-1:0] shl_amt_reg, shl_amt_next;
-    reg [SHIFT_AMT_WIDTH-1:0] shr_amt_reg, shr_amt_next;
+    // Shift amount registers
+    reg [SHIFT_AMT_WIDTH-1:0] r_shl_amt, n_shl_amt;
+    reg [SHIFT_AMT_WIDTH-1:0] r_shr_amt, n_shr_amt;
 
-    assign o_shl_amt = shl_amt_reg;
-    assign o_shr_amt = shr_amt_reg;
+    assign o_shl_amt = r_shl_amt;
+    assign o_shr_amt = r_shr_amt;
 
-    reg [3:0] shl_digit_reg, shl_digit_next;
-    reg [3:0] shr_digit_reg, shr_digit_next;
+    // Digit registers used by variable-shift instructions
+    reg [3:0] r_shl_digit, n_shl_digit;
+    reg [3:0] r_shr_digit, n_shr_digit;
 
-    assign o_shl_digit = shl_digit_reg;
-    assign o_shr_digit = shr_digit_reg;
+    assign o_shl_digit = r_shl_digit;
+    assign o_shr_digit = r_shr_digit;
 
-    reg add_cin_reg, add_cin_next;
+    // Add carry-in register
+    reg r_add_cin, n_add_cin;
 
-    assign o_add_cin = add_cin_reg;
+    assign o_add_cin = r_add_cin;
 
-    reg [`BCDU_NUM_FLAGS-1:0] flags_mask_reg, flags_mask_next;
-    reg                       flags_save_reg, flags_save_next;
+    // Flag mask and save registers control which status flags are updated
+    reg [`BCDU_NUM_FLAGS-1:0] r_flags_mask, n_flags_mask;
+    reg                       r_flags_save, n_flags_save;
 
-    assign o_flags_mask = flags_mask_reg;
-    assign o_flags_save = flags_save_reg;
+    assign o_flags_mask = r_flags_mask;
+    assign o_flags_save = r_flags_save;
 
-    assign o_ready = ~mcycle_en_reg;
+    assign o_ready = ~r_mcycle_en;
 
+    // Combinational next-state logic and output multiplexing
     always @* begin
-        mcycle_en_next     = mcycle_en_reg;
-        mcycle_cnt_ld_next = 1'b0;
-        mcycle_cnt_next    = mcycle_cnt_reg;
+        n_mcycle_en     = r_mcycle_en;
+        n_mcycle_cnt_ld = 1'b0;
+        n_mcycle_cnt    = r_mcycle_cnt;
 
-        wr_en_next     = 1'b0;
-        wr_addr_next   = addr0;
-        rd_addr_a_next = addr0;
-        rd_addr_b_next = addr2;
-        ncp_en_next    = 1'b0;
+        n_wr_en     = 1'b0;
+        n_wr_addr   = addr0;
+        n_rd_addr_a = addr0;
+        n_rd_addr_b = addr2;
+        n_ncp_en    = 1'b0;
 
-        alu_op_code_next = `BCD_ALU_OP_CMP;
-        shl_amt_next     = 0;
-        shr_amt_next     = 0;
-        shl_digit_next   = 4'd0;
-        shr_digit_next   = 4'd0;
-        add_cin_next     = 1'b0;
-        flags_mask_next  = 0;
-        flags_save_next  = 1'b0;
+        n_alu_op_code = `BCD_ALU_OP_CMP;
+        n_shl_amt     = 0;
+        n_shr_amt     = 0;
+        n_shl_digit   = 4'd0;
+        n_shr_digit   = 4'd0;
+        n_add_cin     = 1'b0;
+        n_flags_mask  = 0;
+        n_flags_save  = 1'b0;
 
-        if (mcycle_cnt_ld_reg) mcycle_cnt_next = i_digit;
+        if (r_mcycle_cnt_ld) n_mcycle_cnt = i_digit;
 
-        if (mcycle_en_reg) begin
-            flags_save_next = 1'b1;
+        if (r_mcycle_en) begin
+            n_flags_save = 1'b1;
 
-            if (mcycle_cnt_reg == 4'd0) mcycle_en_next  = 1'b0;
-            else                        mcycle_cnt_next = (mcycle_cnt_reg - 4'd1);
+            if (r_mcycle_cnt == 4'd0) n_mcycle_en  = 1'b0;
+            else                      n_mcycle_cnt = (r_mcycle_cnt - 4'd1);
         end else if (i_valid) begin
+            // Decode operation code and set control signals accordingly
             case (op_code)
-                `BCDU_OP_SHL: begin
-                    mcycle_cnt_ld_next = 1'b1;
+                `BCDU_OP_SHL: begin // Shift left
+                    n_mcycle_cnt_ld = 1'b1;
+                    n_wr_en = shift_wr;
+                    n_alu_op_code = `BCD_ALU_OP_SHL;
 
-                    wr_en_next = shift_wr;
-
-                    alu_op_code_next = `BCD_ALU_OP_SHL;
-
-                    flags_mask_next[`BCDU_ZF] = 1'b1;
-                    flags_mask_next[`BCDU_TF] = 1'b1;
+                    n_flags_mask[`BCDU_ZF] = 1'b1;
+                    n_flags_mask[`BCDU_TF] = 1'b1;
 
                     if (shift_digit_ld) begin
-                        shl_digit_next = (shift_digit > 4'd9) ? i_digit : shift_digit;
-                        shl_amt_next   = 1;
-                        shr_amt_next   = (NUM_DIGITS - 1);
+                        n_shl_digit = (shift_digit > 4'd9) ? i_digit : shift_digit;
+                        n_shl_amt   = 1;
+                        n_shr_amt   = (NUM_DIGITS - 1);
                     end else begin
-                        shl_amt_next = shift_amt;
-                        shr_amt_next = shift_inv_amt;
+                        n_shl_amt = shift_amt;
+                        n_shr_amt = shift_inv_amt;
                     end
                 end
 
-                `BCDU_OP_SHR: begin
-                    mcycle_cnt_ld_next = 1'b1;
+                `BCDU_OP_SHR: begin // Shift right
+                    n_mcycle_cnt_ld = 1'b1;
+                    n_wr_en = shift_wr;
+                    n_alu_op_code = `BCD_ALU_OP_SHR;
 
-                    wr_en_next = shift_wr;
-
-                    alu_op_code_next = `BCD_ALU_OP_SHR;
-
-                    flags_mask_next[`BCDU_ZF] = 1'b1;
-                    flags_mask_next[`BCDU_TF] = 1'b1;
+                    n_flags_mask[`BCDU_ZF] = 1'b1;
+                    n_flags_mask[`BCDU_TF] = 1'b1;
 
                     if (shift_digit_ld) begin
-                        shr_digit_next = shift_digit;
-                        shr_amt_next   = 1;
-                        shl_amt_next   = (NUM_DIGITS - 1);
+                        n_shr_digit = shift_digit;
+                        n_shr_amt   = 1;
+                        n_shl_amt   = (NUM_DIGITS - 1);
                     end else begin
-                        shr_amt_next = shift_amt;
-                        shl_amt_next = shift_inv_amt;
+                        n_shr_amt = shift_amt;
+                        n_shl_amt = shift_inv_amt;
                     end
                 end
 
-                `BCDU_OP_ADD, `BCDU_OP_SUB: begin
-                    wr_en_next     = 1'b1;
-                    rd_addr_a_next = addr1;
-                    ncp_en_next    = sub;
+                `BCDU_OP_ADD, `BCDU_OP_SUB: begin // Add or subtract
+                    n_wr_en     = 1'b1;
+                    n_rd_addr_a = addr1;
+                    n_ncp_en    = sub;
 
-                    alu_op_code_next = `BCD_ALU_OP_ADD;
-                    add_cin_next     = sub;
+                    n_alu_op_code = `BCD_ALU_OP_ADD;
+                    n_add_cin     = sub;
                     
-                    flags_mask_next[`BCDU_ZF] = 1'b1;
-                    flags_mask_next[`BCDU_CF] = 1'b1;
+                    n_flags_mask[`BCDU_ZF] = 1'b1;
+                    n_flags_mask[`BCDU_CF] = 1'b1;
                 end
 
-                `BCDU_OP_CMP: begin
-                    rd_addr_b_next = addr1;
+                `BCDU_OP_CMP: begin // Compare
+                    n_rd_addr_b = addr1;
 
-                    flags_mask_next[`BCDU_GF] = 1'b1;
-                    flags_mask_next[`BCDU_EF] = 1'b1;
+                    n_flags_mask[`BCDU_GF] = 1'b1;
+                    n_flags_mask[`BCDU_EF] = 1'b1;
                 end
 
-                `BCDU_OP_CLR: begin
-                    wr_en_next = 1'b1;
+                `BCDU_OP_CLR: begin // Clear
+                    n_wr_en = 1'b1;
                 end
 
-                `BCDU_OP_MOV: begin
-                    wr_en_next     = 1'b1;
-                    rd_addr_a_next = addr1;
+                `BCDU_OP_MOV: begin // Move
+                    n_wr_en     = 1'b1;
+                    n_rd_addr_a = addr1;
 
-                    alu_op_code_next = `BCD_ALU_OP_SHL;
+                    n_alu_op_code = `BCD_ALU_OP_SHL;
                 end
 
-                `BCDU_OP_ACA, `BCDU_OP_ACS: begin
-                    if ((acc_digit != 0) || (i_digit != 0) || (mcycle_cnt_reg != 0)) wr_en_next = 1'b1;
+                `BCDU_OP_ACC: begin // Accumulate
+                    if ((acc_digit != 0) || (i_digit != 0) || (r_mcycle_cnt != 0)) n_wr_en = 1'b1;
 
-                    rd_addr_b_next = addr1;
-                    ncp_en_next    = sub;
+                    n_rd_addr_b = addr1;
 
-                    alu_op_code_next = `BCD_ALU_OP_ADD;
-                    add_cin_next     = sub;
+                    n_alu_op_code = `BCD_ALU_OP_ADD;
                     
-                    flags_mask_next[`BCDU_ZF] = 1'b1;
-                    flags_mask_next[`BCDU_CF] = 1'b1;
+                    n_flags_mask[`BCDU_ZF] = 1'b1;
+                    n_flags_mask[`BCDU_CF] = 1'b1;
 
                     if (acc_digit > 4'd1) begin
-                        mcycle_en_next  = 1'b1;
-                        mcycle_cnt_next = (acc_digit - 4'd2);
+                        n_mcycle_en  = 1'b1;
+                        n_mcycle_cnt = (acc_digit - 4'd2);
                     end else if ((i_digit > 4'd2) && (i_digit <= 4'd9)) begin
-                        mcycle_en_next  = 1'b1;
-                        mcycle_cnt_next = (i_digit - 4'd2);
-                    end else if (mcycle_cnt_reg > 4'd1) begin
-                        mcycle_en_next  = 1'b1;
-                        mcycle_cnt_next = (mcycle_cnt_reg - 4'd2);
+                        n_mcycle_en  = 1'b1;
+                        n_mcycle_cnt = (i_digit - 4'd2);
+                    end else if (r_mcycle_cnt > 4'd1) begin
+                        n_mcycle_en  = 1'b1;
+                        n_mcycle_cnt = (r_mcycle_cnt - 4'd2);
                     end
                 end
             endcase
         end
     end
 
+    // Sequential register updates on clock edge
     always @(posedge i_clk) begin
         if (i_rst) begin
-            mcycle_en_reg     <= 1'b0;
-            mcycle_cnt_ld_reg <= 1'b0;
-            mcycle_cnt_reg    <= 0;
-            wr_en_reg         <= 1'b0;
-            wr_addr_reg       <= 0;
-            rd_addr_a_reg     <= 0;
-            rd_addr_b_reg     <= 0;
-            ncp_en_reg        <= 1'b0;
-            alu_op_code_reg   <= `BCD_ALU_OP_CMP;
-            shl_amt_reg       <= 0;
-            shr_amt_reg       <= 0;
-            shl_digit_reg     <= 4'd0;
-            shr_digit_reg     <= 4'd0;
-            add_cin_reg       <= 1'b0;
-            flags_mask_reg    <= 0;
-            flags_save_reg    <= 1'b0;
+            r_mcycle_en     <= 1'b0;
+            r_mcycle_cnt_ld <= 1'b0;
+            r_mcycle_cnt    <= 0;
+            r_wr_en         <= 1'b0;
+            r_wr_addr       <= 0;
+            r_rd_addr_a     <= 0;
+            r_rd_addr_b     <= 0;
+            r_ncp_en        <= 1'b0;
+            r_alu_op_code   <= `BCD_ALU_OP_CMP;
+            r_shl_amt       <= 0;
+            r_shr_amt       <= 0;
+            r_shl_digit     <= 4'd0;
+            r_shr_digit     <= 4'd0;
+            r_add_cin       <= 1'b0;
+            r_flags_mask    <= 0;
+            r_flags_save    <= 1'b0;
         end else begin
-            mcycle_en_reg     <= mcycle_en_next;
-            mcycle_cnt_ld_reg <= mcycle_cnt_ld_next;
-            mcycle_cnt_reg    <= mcycle_cnt_next;
-            flags_save_reg    <= flags_save_next;
+            r_mcycle_en     <= n_mcycle_en;
+            r_mcycle_cnt_ld <= n_mcycle_cnt_ld;
+            r_mcycle_cnt    <= n_mcycle_cnt;
+            r_flags_save    <= n_flags_save;
 
-            if (!mcycle_en_reg) begin
-                wr_en_reg       <= wr_en_next;
-                wr_addr_reg     <= wr_addr_next;
-                rd_addr_a_reg   <= rd_addr_a_next;
-                rd_addr_b_reg   <= rd_addr_b_next;
-                ncp_en_reg      <= ncp_en_next;
-                alu_op_code_reg <= alu_op_code_next;
-                shl_amt_reg     <= shl_amt_next;
-                shr_amt_reg     <= shr_amt_next;
-                shl_digit_reg   <= shl_digit_next;
-                shr_digit_reg   <= shr_digit_next;
-                add_cin_reg     <= add_cin_next;
-                flags_mask_reg  <= flags_mask_next;
+            if (!r_mcycle_en) begin
+                r_wr_en       <= n_wr_en;
+                r_wr_addr     <= n_wr_addr;
+                r_rd_addr_a   <= n_rd_addr_a;
+                r_rd_addr_b   <= n_rd_addr_b;
+                r_ncp_en      <= n_ncp_en;
+                r_alu_op_code <= n_alu_op_code;
+                r_shl_amt     <= n_shl_amt;
+                r_shr_amt     <= n_shr_amt;
+                r_shl_digit   <= n_shl_digit;
+                r_shr_digit   <= n_shr_digit;
+                r_add_cin     <= n_add_cin;
+                r_flags_mask  <= n_flags_mask;
             end
         end
     end
