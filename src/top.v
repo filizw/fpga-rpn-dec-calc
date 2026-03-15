@@ -2,23 +2,36 @@
 
 `include "symbols.vh"
 
+// ============================================================================
+// Top
+// ============================================================================
+// System-level integration for UART-driven RPN decimal calculator.
+// RX ASCII symbols are converted and sent to calc_core.
+// calc_core output symbols are buffered, converted back to ASCII, and transmitted.
+
 module top (
-    input wire  i_clk,
-    input wire  i_rst,
-    input wire  i_rx,
-    output wire o_tx
+    // Input interface
+    input wire  i_clk,  // Clock
+    input wire  i_rst,  // Reset
+    input wire  i_rx,   // UART RX line
+
+    // Output interface
+    output wire o_tx    // UART TX line
 );
 
+    // Calculator core configuration
     localparam NUM_DIGITS  = 20;
     localparam STACK_DEPTH = 6;
 
+    // TX FIFO datapath and control signals
     wire [`SYM_WIDTH-1:0] tx_fifo_wr_data;
     wire [`SYM_WIDTH-1:0] tx_fifo_rd_data;
-    wire                      tx_fifo_rd;
-    wire                      tx_fifo_wr;
-    wire                      tx_fifo_empty;
-    wire                      tx_fifo_full;
+    wire                  tx_fifo_rd;
+    wire                  tx_fifo_wr;
+    wire                  tx_fifo_empty;
+    wire                  tx_fifo_full;
 
+    // Output buffering between calc_core and UART TX
     fifo #(
         .DATA_WIDTH(`SYM_WIDTH),
         .DEPTH(NUM_DIGITS + 6)
@@ -33,23 +46,29 @@ module top (
         .o_full(tx_fifo_full)
     );
 
+    // UART ASCII domain signals
     wire [7:0] ascii_char_in;
     wire [7:0] ascii_char_out;
 
-    wire [`SYM_WIDTH-1:0] du_sym_in;
+    // Calculator symbol domain signal
+    wire [`SYM_WIDTH-1:0] sym_in;
 
+    // RX ASCII to internal symbol conversion
     ascii_to_sym u_ascii_to_sym (
         .i_char(ascii_char_in),
-        .o_symbol(du_sym_in)
+        .o_symbol(sym_in)
     );
 
+    // Internal symbol to TX ASCII conversion
     sym_to_ascii u_sym_to_ascii (
         .i_symbol(tx_fifo_rd_data),
         .o_char(ascii_char_out)
     );
 
+    // Pulse when UART RX completes one byte
     wire du_sym_in_valid;
 
+    // Calculator core instance
     calc_core #(
         .NUM_DIGITS(NUM_DIGITS),
         .STACK_DEPTH(STACK_DEPTH)
@@ -57,12 +76,13 @@ module top (
         .i_clk(i_clk),
         .i_rst(i_rst),
         .i_valid(du_sym_in_valid),
-        .i_symbol(du_sym_in),
+        .i_symbol(sym_in),
         .o_symbol(tx_fifo_wr_data),
         .o_symbol_valid(tx_fifo_wr),
         .o_ready()
     );
-    
+
+    // UART wrapper instance
     uart u_uart (
         .i_clk(i_clk),
         .i_rst(i_rst),
