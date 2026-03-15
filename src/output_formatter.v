@@ -4,52 +4,68 @@
 `include "bcdu_op_codes.vh"
 `include "bcdu_flags.vh"
 
+// ============================================================================
+// Output Formatter
+// ============================================================================
+// Formats BCDU numeric output into symbol stream form. Supports direct
+// loopback symbols, signed-number streaming, comma insertion,
+// and suppression of redundant trailing zeros.
+
 module output_formatter #(
-    parameter NUM_DIGITS  = 4,
-    parameter COMMA_WIDTH = 2
+    parameter NUM_DIGITS      = 4, // Number of digits per operand
+    parameter COMMA_POS_WIDTH = 2  // Bit width of comma position
 )(
-    input wire                       i_clk,
-    input wire                       i_rst,
-    input wire                       i_loopback_en,
-    input wire  [`SYM_WIDTH-1:0] i_loopback_symbol,
-    input wire                       i_stream_start,
-    input wire                       i_sign,
-    input wire     [COMMA_WIDTH-1:0] i_comma,
-    input wire                 [3:0] i_bcdu_addr,
-    input wire                 [3:0] i_bcdu_digit,
-    input wire [`BCDU_NUM_FLAGS-1:0] i_bcdu_flags,
-    output wire               [15:0] o_bcdu_instr,
-    output wire                      o_bcdu_instr_valid,
-    output wire [`SYM_WIDTH-1:0] o_symbol,
-    output wire                      o_symbol_valid,
-    output wire                      o_stream_done
+    input wire                       i_clk,                 // Clock
+    input wire                       i_rst,                 // Reset
+    input wire                       i_loopback_en,         // Send loopback symbol
+    input wire      [`SYM_WIDTH-1:0] i_loopback_symbol,     // Loopback symbol
+    input wire                       i_stream_start,        // Start formatted number stream
+    input wire                       i_sign,                // Number sign (1 = minus)
+    input wire [COMMA_POS_WIDTH-1:0] i_comma,               // Comma position
+    input wire                 [3:0] i_bcdu_addr,           // Source BCDU register address
+    input wire                 [3:0] i_bcdu_digit,          // Current BCDU digit
+    input wire [`BCDU_NUM_FLAGS-1:0] i_bcdu_flags,          // BCDU status flags
+    output wire               [15:0] o_bcdu_instr,          // BCDU instruction
+    output wire                      o_bcdu_instr_valid,    // BCDU instruction valid
+    output wire     [`SYM_WIDTH-1:0] o_symbol,              // Output symbol
+    output wire                      o_symbol_valid,        // Output symbol valid
+    output wire                      o_stream_done          // Stream finished
 );
     
+    // FSM state width
     localparam STATE_WIDTH = 3;
 
+    // FSM state encoding
     localparam STATE_LOOPBACK = 0,
                STATE_NEW_LINE = 1,
                STATE_SIGN     = 2,
                STATE_DIGITS   = 3,
                STATE_DONE     = 4;
     
+    // FSM state registers
     reg [STATE_WIDTH-1:0] state_reg, state_next;
 
+    // Widths for digit index and BCDU shift amount
     localparam DIGIT_IDX_WIDTH = $clog2(NUM_DIGITS);
     localparam SHIFT_AMT_WIDTH = $clog2(NUM_DIGITS + 1);
 
+    // Digit iteration and shift-control registers
     reg [DIGIT_IDX_WIDTH-1:0] digit_idx_reg, digit_idx_next;
     reg [SHIFT_AMT_WIDTH-1:0] shift_amt_reg, shift_amt_next;
 
+    // Formatter drives SHR instructions while streaming digits
     assign o_bcdu_instr       = {`BCDU_OP_SHR, i_bcdu_addr, 2'b00, {6-SHIFT_AMT_WIDTH{1'b0}}, shift_amt_reg};
     assign o_bcdu_instr_valid = ((state_reg == STATE_DIGITS) && (shift_amt_reg != 0));
 
+    // Tracks first significant digit
     reg  got_msd_reg, got_msd_next;
     wire got_msd = (got_msd_reg ? 1'b1 : got_msd_next);
 
+    // Tracks comma insertion status
     reg  got_comma_reg, got_comma_next;
     wire got_comma = (got_comma_reg ? 1'b1 : got_comma_next);
 
+    // Symbol buffering/output registers
     reg [`SYM_WIDTH-1:0] symbol_buf_reg, symbol_buf_next;
     reg [`SYM_WIDTH-1:0] symbol_out_reg, symbol_out_next;
     reg                      symbol_out_valid_reg, symbol_out_valid_next;
@@ -59,6 +75,7 @@ module output_formatter #(
 
     assign o_stream_done = (state_reg == STATE_DONE);
 
+    // True when all remaining unshifted digits are zero
     wire zero_left = ((i_bcdu_digit == 4'd0) && !i_bcdu_flags[`BCDU_TF]);
 
     reg zero_left_reg;
@@ -73,11 +90,13 @@ module output_formatter #(
         else if (state_reg == STATE_LOOPBACK) zero_left_reg <= 1'b0;
     end
 
+    // Convert a 4-bit BCD digit to symbol encoding
     function automatic [`SYM_WIDTH-1:0] digit_to_symbol;
         input [3:0] digit;
         digit_to_symbol = {{`SYM_WIDTH-4{1'b1}}, digit};
     endfunction
 
+    // FSM: combinational next-state and output generation
     always @* begin
         state_next            = state_reg;
         digit_idx_next        = digit_idx_reg;
@@ -90,6 +109,7 @@ module output_formatter #(
 
         case (state_reg)
             STATE_LOOPBACK: begin
+                // Idle/loopback state: send direct symbols and await stream start
                 digit_idx_next = (NUM_DIGITS - 1);
                 shift_amt_next = NUM_DIGITS;
                 got_msd_next   = 1'b0;
@@ -104,6 +124,7 @@ module output_formatter #(
             end
 
             STATE_NEW_LINE: begin
+                // Prefix formatted stream with a newline
                 symbol_out_next       = `SYM_NEW_LINE;
                 symbol_out_valid_next = 1'b1;
 
@@ -111,6 +132,7 @@ module output_formatter #(
             end
 
             STATE_SIGN: begin
+                // Send minus sign for negative values
                 if (i_sign == 1'b1) begin
                     symbol_out_next       = `SYM_MINUS;
                     symbol_out_valid_next = 1'b1;
@@ -120,6 +142,7 @@ module output_formatter #(
             end
 
             STATE_DIGITS: begin
+                // Stream digits, manage leading zeros and comma position
                 if (shift_amt_reg != 0) shift_amt_next = (shift_amt_reg - 1);
 
                 if (i_bcdu_digit != 4'hF) begin
@@ -150,6 +173,7 @@ module output_formatter #(
             end
 
             STATE_DONE: begin
+                // Send deferred post-comma digit and return to loopback state
                 state_next = STATE_LOOPBACK;
 
                 if (got_comma_reg && !zero_left_reg) begin
@@ -160,6 +184,7 @@ module output_formatter #(
         endcase
     end
 
+    // Sequential state/register update
     always @(posedge i_clk) begin
         if (i_rst) begin
             state_reg            <= STATE_LOOPBACK;

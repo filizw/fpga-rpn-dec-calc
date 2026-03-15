@@ -29,7 +29,7 @@
 // Plus sign / add operation
 `define SYM_PLUS 5'h1B
 
-// Decimal point / comma
+// Comma / decimal point
 `define SYM_COMMA 5'h1C
 
 // Minus sign / subtract operation

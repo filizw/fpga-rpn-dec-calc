@@ -7,34 +7,34 @@ module calc_core #(
     parameter NUM_DIGITS  = 4,
     parameter STACK_DEPTH = 7
 )(
-    input wire                       i_clk,
-    input wire                       i_rst,
-    input wire                       i_valid,
+    input wire                   i_clk,
+    input wire                   i_rst,
+    input wire                   i_valid,
     input wire  [`SYM_WIDTH-1:0] i_symbol,
     output wire [`SYM_WIDTH-1:0] o_symbol,
-    output wire                      o_symbol_valid,
-    output wire                      o_ready
+    output wire                  o_symbol_valid,
+    output wire                  o_ready
 );
 
-    localparam COMMA_WIDTH = $clog2(NUM_DIGITS);
-    localparam ADDR_WIDTH  = $clog2(STACK_DEPTH);
+    localparam COMMA_POS_WIDTH = $clog2(NUM_DIGITS);
+    localparam ADDR_WIDTH      = $clog2(STACK_DEPTH);
 
     reg  [3:0] stack_ptr_reg;
     wire [3:0] stack_ptr_next;
     wire [3:0] stack_ptr      = stack_ptr_reg;
     wire [3:0] prev_stack_ptr = ((stack_ptr_reg == 0) ? 0 : (stack_ptr_reg - 1));
 
-    reg                 wr_sign_comma_en;
-    reg [COMMA_WIDTH:0] wr_sign_comma;
+    reg                     wr_sign_comma_en;
+    reg [COMMA_POS_WIDTH:0] wr_sign_comma;
 
     wire rd_prev_sign;
     wire rd_sign;
 
-    wire [COMMA_WIDTH-1:0] rd_prev_comma;
-    wire [COMMA_WIDTH-1:0] rd_comma;
+    wire [COMMA_POS_WIDTH-1:0] rd_prev_comma;
+    wire [COMMA_POS_WIDTH-1:0] rd_comma;
 
     reg_file #(
-        .REG_WIDTH(COMMA_WIDTH + 1),
+        .REG_WIDTH(COMMA_POS_WIDTH + 1),
         .NUM_REGS(STACK_DEPTH),
         .ADDR_WIDTH(ADDR_WIDTH)
     ) sign_comma_reg_file_inst (
@@ -141,7 +141,7 @@ module calc_core #(
 
     output_formatter #(
         .NUM_DIGITS(NUM_DIGITS),
-        .COMMA_WIDTH(COMMA_WIDTH)
+        .COMMA_POS_WIDTH(COMMA_POS_WIDTH)
     ) u_output_formatter (
         .i_clk(i_clk),
         .i_rst(i_rst),
@@ -161,14 +161,14 @@ module calc_core #(
     );
 
     // ADD SUB
-    wire add_sub_instr_valid;
-    wire [15:0] add_sub_instr;
-    wire add_sub_sign;
-    wire [COMMA_WIDTH-1:0] add_sub_comma_pos;
-    wire add_sub_ready;
+    wire                       add_sub_instr_valid;
+    wire                [15:0] add_sub_instr;
+    wire                       add_sub_sign;
+    wire [COMMA_POS_WIDTH-1:0] add_sub_comma_pos;
+    wire                       add_sub_ready;
 
     add_sub_seq #(
-        .COMMA_POS_W(COMMA_WIDTH)
+        .COMMA_POS_WIDTH(COMMA_POS_WIDTH)
     ) u_add_sub_seq (
         .i_clk(i_clk),
         .i_rst(i_rst),
@@ -192,15 +192,15 @@ module calc_core #(
     // ADD SUB
 
     // MUL
-    wire mul_instr_valid;
-    wire [15:0] mul_instr;
-    wire mul_sign;
-    wire [COMMA_WIDTH-1:0] mul_comma_pos;
-    wire mul_ready;
+    wire                       mul_instr_valid;
+    wire                [15:0] mul_instr;
+    wire                       mul_sign;
+    wire [COMMA_POS_WIDTH-1:0] mul_comma_pos;
+    wire                       mul_ready;
 
     mul_seq #(
-        .N_DIGITS(NUM_DIGITS),
-        .COMMA_POS_W(COMMA_WIDTH),
+        .NUM_DIGITS(NUM_DIGITS),
+        .COMMA_POS_WIDTH(COMMA_POS_WIDTH),
         .ACC_ADDR(STACK_DEPTH)
     ) u_mul_seq (
         .i_clk(i_clk),
@@ -222,15 +222,15 @@ module calc_core #(
     // MUL
 
     // DIV
-    wire div_instr_valid;
-    wire [15:0] div_instr;
-    wire div_sign;
-    wire [COMMA_WIDTH-1:0] div_comma_pos;
-    wire div_ready;
+    wire                       div_instr_valid;
+    wire                [15:0] div_instr;
+    wire                       div_sign;
+    wire [COMMA_POS_WIDTH-1:0] div_comma_pos;
+    wire                       div_ready;
 
     div_seq #(
-        .N_DIGITS(NUM_DIGITS),
-        .COMMA_POS_W(COMMA_WIDTH),
+        .NUM_DIGITS(NUM_DIGITS),
+        .COMMA_POS_WIDTH(COMMA_POS_WIDTH),
         .REM_ADDR(STACK_DEPTH),
         .QUO_ADDR(STACK_DEPTH + 1)
     ) u_div_seq (
@@ -328,19 +328,19 @@ module calc_core #(
         div_done      = 1'b0;
 
         if (comma_clr) begin
-            wr_sign_comma_en               = 1'b1;
-            wr_sign_comma[COMMA_WIDTH-1:0] = 0;
+            wr_sign_comma_en                   = 1'b1;
+            wr_sign_comma[COMMA_POS_WIDTH-1:0] = 0;
         end else if (comma_inc) begin
-            wr_sign_comma_en               = 1'b1;
-            wr_sign_comma[COMMA_WIDTH-1:0] = (rd_comma + 1);
+            wr_sign_comma_en                   = 1'b1;
+            wr_sign_comma[COMMA_POS_WIDTH-1:0] = (rd_comma + 1);
         end
 
         if (sign_clr) begin
-            wr_sign_comma_en           = 1'b1;
-            wr_sign_comma[COMMA_WIDTH] = 1'b0;
+            wr_sign_comma_en               = 1'b1;
+            wr_sign_comma[COMMA_POS_WIDTH] = 1'b0;
         end else if (sign_set) begin
-            wr_sign_comma_en           = 1'b1;
-            wr_sign_comma[COMMA_WIDTH] = 1'b1;
+            wr_sign_comma_en               = 1'b1;
+            wr_sign_comma[COMMA_POS_WIDTH] = 1'b1;
         end
 
         if (!add_sub_done_reg && add_sub_ready) begin
