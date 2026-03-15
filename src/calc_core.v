@@ -3,27 +3,40 @@
 `include "symbols.vh"
 `include "bcdu_flags.vh"
 
+// ============================================================================
+// Calculator Core
+// ============================================================================
+// Top-level module for the RPN decimal calculator.
+// Coordinates input decoding, arithmetic sequencing, output formatting,
+// and shared BCDU instruction arbitration.
+
 module calc_core #(
-    parameter NUM_DIGITS  = 4,
-    parameter STACK_DEPTH = 7
+    parameter NUM_DIGITS  = 4,  // Number of digits per operand
+    parameter STACK_DEPTH = 7   // RPN stack depth
 )(
-    input wire                   i_clk,
-    input wire                   i_rst,
-    input wire                   i_valid,
-    input wire  [`SYM_WIDTH-1:0] i_symbol,
-    output wire [`SYM_WIDTH-1:0] o_symbol,
-    output wire                  o_symbol_valid,
-    output wire                  o_ready
+    // Input interface
+    input wire                   i_clk,          // Clock
+    input wire                   i_rst,          // Reset
+    input wire                   i_valid,        // Input symbol valid
+    input wire  [`SYM_WIDTH-1:0] i_symbol,       // Input symbol
+
+    // Output interface
+    output wire [`SYM_WIDTH-1:0] o_symbol,       // Output symbol
+    output wire                  o_symbol_valid, // Output symbol valid
+    output wire                  o_ready         // Core ready for next input symbol
 );
 
+    // Derived widths
     localparam COMMA_POS_WIDTH = $clog2(NUM_DIGITS);
     localparam ADDR_WIDTH      = $clog2(STACK_DEPTH);
 
+    // Stack pointer
     reg  [3:0] stack_ptr_reg;
     wire [3:0] stack_ptr_next;
     wire [3:0] stack_ptr      = stack_ptr_reg;
     wire [3:0] prev_stack_ptr = ((stack_ptr_reg == 0) ? 0 : (stack_ptr_reg - 1));
 
+    // Sign-comma register file interface
     reg                     wr_sign_comma_en;
     reg [COMMA_POS_WIDTH:0] wr_sign_comma;
 
@@ -54,6 +67,7 @@ module calc_core #(
     wire [`BCDU_NUM_FLAGS-1:0] bcdu_flags;
     wire                       bcdu_ready;
 
+    // Shared BCD execution unit
     bcdu #(
         .NUM_DIGITS(NUM_DIGITS),
         .NUM_REGS(STACK_DEPTH + 2)
@@ -80,6 +94,7 @@ module calc_core #(
     wire mul_start;
     wire div_start;
 
+    // Operation completion edge tracking
     reg add_sub_done_reg, add_sub_done_next, add_sub_done;
     reg mul_done_reg, mul_done_next, mul_done;
     reg div_done_reg, div_done_next, div_done;
@@ -107,8 +122,10 @@ module calc_core #(
     wire sign_set;
     wire sign_clr;
 
+    // Done pulse exposed to input interpreter
     wire op_done = print_done | add_sub_done | mul_done | div_done;
 
+    // Input symbol decoder and operation launcher
     input_interpreter #(
         .NUM_DIGITS(NUM_DIGITS),
         .STACK_DEPTH(STACK_DEPTH)
@@ -139,6 +156,7 @@ module calc_core #(
     wire        out_fmt_bcdu_instr_valid;
     wire [15:0] out_fmt_bcdu_instr;
 
+    // Output stream formatter
     output_formatter #(
         .NUM_DIGITS(NUM_DIGITS),
         .COMMA_POS_WIDTH(COMMA_POS_WIDTH)
@@ -261,6 +279,7 @@ module calc_core #(
                BCDU_INSTR_SRC_MUL_SEQ = 3,
                BCDU_INSTR_SRC_DIV_SEQ = 4;
 
+    // Selects instruction source for shared BCDU
     reg [BCDU_INSTR_SRC_WIDTH-1:0] bcdu_instr_src_reg, bcdu_instr_src_next;
 
     initial begin
@@ -315,6 +334,7 @@ module calc_core #(
     end
 
     always @* begin
+        // Defaults
         wr_sign_comma_en = 1'b0;
         wr_sign_comma    = {rd_sign, rd_comma};
 
@@ -327,6 +347,7 @@ module calc_core #(
         div_done_next = div_ready;
         div_done      = 1'b0;
 
+        // Manual sign/comma updates
         if (comma_clr) begin
             wr_sign_comma_en                   = 1'b1;
             wr_sign_comma[COMMA_POS_WIDTH-1:0] = 0;
