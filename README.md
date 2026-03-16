@@ -117,8 +117,9 @@ The FPGA project is built and programmed using the Vivado script `run_vivado.sh`
 
 ### FPGA Target Platform
 
-- **Board:** Digilent Arty S7  
-- **Toolchain:** Vivado  
+- **Board:** Digilent Arty S7
+- **Toolchain:** Vivado
+- **System Clock:** 100 MHz
 
 The system communicates with the user via a UART interface, allowing arithmetic expressions to be entered and evaluated directly on the FPGA.
 
@@ -132,11 +133,11 @@ The project includes an analysis of FPGA resource utilization and timing charact
 
 Increasing the number of digits increases the critical path length in the arithmetic datapath, eventually leading to negative slack for sufficiently large configurations.
 
-### LUT utilization:
+### LUT Utilization:
 
 ![LUT Utilization](docs/lut_utilization.png)
 
-### FF utilization:
+### FF Utilization:
 
 ![FF Utilization](docs/ff_utilization.png)
 
